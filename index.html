@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f2f3a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Sam – English Buddy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9f1ee;--ink:#0f2f3a;--card:#fff;--me:#0f2f3a;--meText:#fff;--acc:#f2a93b;--fix:#fff3d6;--mute:#5b7580;--ok:#2f8f6b}
+@media(prefers-color-scheme:dark){:root{--bg:#0a1f27;--ink:#e6f0ee;--card:#13303b;--me:#f2a93b;--meText:#2a1a00;--fix:#3a3015;--mute:#8fa9b2}}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;
+ padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px}
+h1{font-size:1.35rem;font-weight:800;letter-spacing:-.02em}
+.lvl{font-size:.8rem;background:var(--ink);color:var(--bg);padding:5px 12px;border-radius:99px;font-weight:600;border:0;cursor:pointer}
+#log{flex:1;overflow-y:auto;padding:8px 16px 16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.m{max-width:86%;padding:11px 15px;border-radius:20px;line-height:1.4;font-size:1.02rem;background:var(--card)}
+.m.sam{align-self:flex-start;border-bottom-left-radius:6px}
+.m.me{align-self:flex-end;background:var(--me);color:var(--meText);border-bottom-right-radius:6px}
+.fix{align-self:flex-start;max-width:86%;background:var(--fix);border-left:4px solid var(--acc);padding:9px 13px;border-radius:12px;font-size:.9rem;line-height:1.4}
+.fix s{opacity:.65}.fix b{color:var(--ok)}
+.words{align-self:flex-start;font-size:.82rem;color:var(--mute);padding-left:4px}
+.sys{align-self:center;color:var(--mute);font-size:.85rem;text-align:center;max-width:90%}
+.dots{display:inline-flex;gap:4px}.dots i{width:7px;height:7px;border-radius:50%;background:var(--mute);animation:b 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes b{50%{transform:translateY(-5px);opacity:.4}}
+footer{padding:10px 16px 16px;display:flex;flex-direction:column;gap:10px;align-items:center}
+.row{display:flex;gap:8px;width:100%}
+#txt{flex:1;border:2px solid transparent;background:var(--card);color:var(--ink);padding:12px 16px;border-radius:99px;font:inherit;outline:0}
+#txt:focus-visible{border-color:var(--acc)}
+.sm{border:0;background:var(--card);color:var(--ink);border-radius:99px;padding:0 16px;font:inherit;font-weight:600;cursor:pointer}
+#mic{width:84px;height:84px;border-radius:50%;border:0;background:var(--acc);color:#2a1a00;font-size:2rem;cursor:pointer;
+ box-shadow:0 0 0 0 rgba(242,169,59,.6);transition:transform .15s}
+#mic:active{transform:scale(.94)}
+#mic.on{background:#e5533d;color:#fff;animation:p 1.3s infinite}
+#mic.talk{background:var(--ok);color:#fff}
+@keyframes p{70%{box-shadow:0 0 0 22px rgba(229,83,61,0)}}
+#st{font-size:.85rem;color:var(--mute);min-height:1.2em}
+label.tg{font-size:.82rem;color:var(--mute);display:flex;gap:6px;align-items:center}
+.start{margin:auto;text-align:center;padding:24px;max-width:340px}
+.start p{margin:12px 0 22px;color:var(--mute);line-height:1.5}
+.start button{background:var(--ink);color:var(--bg);border:0;padding:15px 28px;border-radius:99px;font:inherit;font-weight:800;font-size:1.05rem;cursor:pointer}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header><h1>Sam</h1><button class="lvl" id="lvl" title="Mon profil"></button></header>
+<div id="log"></div>
+<footer>
+  <div id="st"></div>
+  <div class="row"><input id="txt" placeholder="Écris en anglais si tu préfères…" autocomplete="off"><button class="sm" id="send">Envoyer</button></div>
+  <button id="mic" aria-label="Parler">🎤</button>
+  <label class="tg"><input type="checkbox" id="auto" checked> Conversation continue (le micro se rouvre tout seul)</label>
+</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+const log=$('log'),st=$('st'),mic=$('mic');
+const KEY='sam_state_v1';
+let S=load();
+function load(){try{return Object.assign({level:null,turns:0,facts:[],mistakes:{},words:[],history:[]},JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return{level:null,turns:0,facts:[],mistakes:{},words:[],history:[]}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+// ---------- UI ----------
+function badge(){$('lvl').textContent=S.level?('Niveau '+S.level):'Test de niveau'}
+function add(cls,html){const d=document.createElement('div');d.className=cls;d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d}
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function render(){
+  log.innerHTML='';
+  if(!S.history.length){
+    add('start',`<h2>Salut ! Moi c'est Sam.</h2><p>Je vais te parler en anglais comme un ami. Je te corrige quand tu te trompes, je retiens ce que tu me racontes, et je m'adapte à ton niveau. On commence par une petite discussion pour le mesurer.</p><button id="go">Commencer</button>`);
+    $('go').onclick=()=>{log.innerHTML='';unlockAudio();turn("Hi! I'm ready to start.",true)};
+  } else {
+    S.history.slice(-30).forEach(m=>add('m '+(m.role==='user'?'me':'sam'),esc(m.content)));
+    add('sys','— Bon retour ! Tape ou parle pour continuer —');
+  }
+  badge();
+}
+
+// ---------- Voix ----------
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false,speaking=false,busy=false,voice=null;
+function pickVoice(){const v=speechSynthesis.getVoices().filter(x=>x.lang.startsWith('en'));
+  voice=v.find(x=>/Google US|Samantha|Aria|Jenny|Natural/i.test(x.name))||v.find(x=>x.lang==='en-US')||v[0]||null}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function unlockAudio(){try{speechSynthesis.speak(new SpeechSynthesisUtterance(''))}catch(e){}}
+
+function speak(text){return new Promise(res=>{
+  if(!('speechSynthesis' in window))return res();
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);u.lang='en-US';if(voice)u.voice=voice;
+  u.rate=S.level==='A1'||S.level==='A2'||!S.level?.9:1;
+  speaking=true;mic.className='talk';st.textContent='Sam parle…';
+  u.onend=u.onerror=()=>{speaking=false;mic.className='';st.textContent='';res()};
+  speechSynthesis.speak(u);
+})}
+
+function startListen(){
+  if(!SR){st.textContent="Micro non supporté ici : utilise Chrome (Android) ou écris.";return}
+  if(listening||busy||speaking)return;
+  rec=new SR();rec.lang='en-US';rec.interimResults=true;rec.continuous=false;
+  let final='';
+  rec.onstart=()=>{listening=true;mic.className='on';st.textContent='Je t\'écoute…'};
+  rec.onresult=e=>{let t='';for(const r of e.results){t+=r[0].transcript;if(r.isFinal)final=t}
+    st.textContent=t};
+  rec.onerror=e=>{listening=false;mic.className='';
+    if(e.error==='not-allowed')st.textContent='Autorise le micro dans ton navigateur.';
+    else if(e.error==='no-speech'){st.textContent='';if($('auto').checked&&!busy)setTimeout(startListen,400)}}
+  rec.onend=()=>{listening=false;mic.className='';
+    const t=(final||'').trim();if(t)turn(t)}
+  try{rec.start()}catch(e){}
+}
+function stopListen(){try{rec&&rec.stop()}catch(e){}}
+mic.onclick=()=>{unlockAudio();if(speaking){speechSynthesis.cancel();return}listening?stopListen():startListen()};
+
+// ---------- Cerveau ----------
+async function turn(text,silentUser){
+  if(busy)return;busy=true;
+  if(!silentUser)add('m me',esc(text));
+  const msgs=S.history.slice(-14).map(m=>({role:m.role,content:m.content}));
+  msgs.push({role:'user',content:text});
+  const wait=add('m sam','<span class="dots"><i></i><i></i><i></i></span>');
+  st.textContent='Sam réfléchit…';
+  try{
+    const r=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({state:{level:S.level,turns:S.turns,facts:S.facts,mistakes:S.mistakes},messages:msgs})});
+    const d=await r.json();
+    if(!r.ok||d.error)throw new Error(d.error||'Erreur serveur');
+    wait.innerHTML=esc(d.reply);
+    if(d.correction&&d.correction.fixed){
+      add('fix',`<s>${esc(d.correction.original||text)}</s><br><b>✓ ${esc(d.correction.fixed)}</b><br>${esc(d.correction.why_fr||'')}`)}
+    (d.new_words||[]).forEach(w=>{if(w.en&&!S.words.find(x=>x.en===w.en)){S.words.push(w);add('words',`📘 ${esc(w.en)} = ${esc(w.fr||'')}`)}});
+    // mémoire
+    if(!silentUser)S.history.push({role:'user',content:text});
+    else S.history.push({role:'user',content:text});
+    S.history.push({role:'assistant',content:d.reply});
+    S.history=S.history.slice(-40);S.turns++;
+    (d.new_facts||[]).forEach(f=>{if(f&&!S.facts.includes(f))S.facts.push(f)});S.facts=S.facts.slice(-80);
+    (d.mistake_tags||[]).forEach(t=>S.mistakes[t]=(S.mistakes[t]||0)+1);
+    if(d.level&&d.level!==S.level){const first=!S.level;S.level=d.level;if(first)add('sys',`🎯 Ton niveau : <b>${esc(d.level)}</b>`)}
+    save();badge();
+    busy=false;
+    await speak(d.reply);
+    if($('auto').checked)startListen();
+  }catch(e){
+    busy=false;wait.innerHTML='Oups, problème de connexion. Réessaie.';st.textContent=String(e.message||e);
+  }
+}
+
+$('send').onclick=()=>{const t=$('txt').value.trim();if(t){$('txt').value='';unlockAudio();turn(t)}};
+$('txt').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
+$('lvl').onclick=()=>{
+  const top=Object.entries(S.mistakes).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]).join(', ')||'—';
+  add('sys',`Niveau : ${S.level||'à tester'} · ${S.turns} échanges · ${S.facts.length} souvenirs · ${S.words.length} mots appris<br>Points à travailler : ${esc(top)}`)};
+
+render();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+</script>
+</body>
+</html>
